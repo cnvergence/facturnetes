@@ -1,0 +1,16 @@
+domain: cnvergence.io
+layout:
+- go.kubebuilder.io/v3
+projectName: facturnetes
+repo: github.com/cnvergence/facturnetes
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: cnvergence.io
+  group: facturnetes
+  kind: Invoice
+  path: github.com/cnvergence/facturnetes/api/v1
+  version: v1
+version: "3"

@@ -1,0 +1,20 @@
+# permissions for end users to view invoices.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: invoice-viewer-role
+rules:
+- apiGroups:
+  - facturnetes.cnvergence.io
+  resources:
+  - invoices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - facturnetes.cnvergence.io
+  resources:
+  - invoices/status
+  verbs:
+  - get

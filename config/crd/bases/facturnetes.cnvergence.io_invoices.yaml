@@ -1,0 +1,167 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: invoices.facturnetes.cnvergence.io
+spec:
+  group: facturnetes.cnvergence.io
+  names:
+    kind: Invoice
+    listKind: InvoiceList
+    plural: invoices
+    singular: invoice
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Invoice is the Schema for the invoices API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: InvoiceSpec defines the desired state of Invoice
+            properties:
+              bank:
+                description: Bank details on the invoice.
+                properties:
+                  accountNumber:
+                    type: string
+                  swift:
+                    type: string
+                required:
+                - accountNumber
+                - swift
+                type: object
+              company:
+                description: Company details of buyer and seller.
+                properties:
+                  buyer:
+                    description: Buyer company details.
+                    properties:
+                      address:
+                        type: string
+                      name:
+                        type: string
+                      vat:
+                        type: string
+                    required:
+                    - address
+                    - name
+                    - vat
+                    type: object
+                  seller:
+                    description: Seller company details.
+                    properties:
+                      address:
+                        type: string
+                      name:
+                        type: string
+                      vat:
+                        type: string
+                    required:
+                    - address
+                    - name
+                    - vat
+                    type: object
+                required:
+                - buyer
+                - seller
+                type: object
+              currency:
+                type: string
+              dueDate:
+                type: string
+              issueDate:
+                type: string
+              items:
+                items:
+                  description: Item parameters.
+                  properties:
+                    description:
+                      type: string
+                    quantity:
+                      type: number
+                    unitPrice:
+                      type: number
+                    vatRate:
+                      type: number
+                  required:
+                  - description
+                  - quantity
+                  - unitPrice
+                  - vatRate
+                  type: object
+                type: array
+              notes:
+                type: string
+              number:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                type: string
+              options:
+                description: Options of the PDF document.
+                properties:
+                  font:
+                    type: string
+                required:
+                - font
+                type: object
+              saleDate:
+                type: string
+              signature:
+                type: string
+            required:
+            - bank
+            - company
+            - currency
+            - dueDate
+            - issueDate
+            - items
+            - notes
+            - number
+            - saleDate
+            - signature
+            type: object
+          status:
+            description: InvoiceStatus defines the observed state of Invoice
+            properties:
+              invoiceResourceStatus:
+                properties:
+                  status:
+                    type: string
+                type: object
+              lastProcessedTime:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

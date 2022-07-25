@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"context"
+
 	facturnetesv1 "github.com/cnvergence/facturnetes/api/v1"
 	generator "github.com/cnvergence/invoice-generator/invoice"
 	"gopkg.in/yaml.v2"
@@ -28,7 +30,7 @@ func (r *InvoiceReconciler) constructConfigMap(invoice *facturnetesv1.Invoice, d
 	return configMap, nil
 }
 
-func (r *InvoiceReconciler) constuctService(invoice *facturnetesv1.Invoice) (*corev1.Service, error) {
+func (r *InvoiceReconciler) constructService(invoice *facturnetesv1.Invoice) (*corev1.Service, error) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      invoice.Name,
@@ -107,6 +109,54 @@ func (r *InvoiceReconciler) constructPod(invoice *facturnetesv1.Invoice) (*corev
 	}
 
 	return pod, nil
+}
+
+func (r *InvoiceReconciler) ensureService(invoice *facturnetesv1.Invoice) error {
+	svc, err := r.constructService(invoice)
+	if err != nil {
+		r.log.Error(err, "unable to construct Pod from template")
+		return err
+	}
+
+	r.log.Infof("creating a new Pod %s/%s", svc.Namespace, svc.Name)
+	if err := r.client.Create(context.TODO(), svc); err != nil {
+		r.log.Errorf("unable to create Pod: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *InvoiceReconciler) ensurePod(invoice *facturnetesv1.Invoice) error {
+	pod, err := r.constructPod(invoice)
+	if err != nil {
+		r.log.Error(err, "unable to construct Pod from template")
+		return err
+	}
+
+	r.log.Infof("creating a new Pod %s/%s", pod.Namespace, pod.Name)
+	if err := r.client.Create(context.TODO(), pod); err != nil {
+		r.log.Errorf("unable to create Pod: %v", err)
+		return err
+	}
+
+	return nil
+}
+
+func (r *InvoiceReconciler) ensureConfigMap(invoice *facturnetesv1.Invoice, pdf []byte) error {
+	configMap, err := r.constructConfigMap(invoice, pdf)
+	if err != nil {
+		r.log.Error(err, "unable to construct ConfigMap from template")
+		return err
+	}
+
+	r.log.Infof("creating a new ConfigMap %s/%s", configMap.Namespace, configMap.Name)
+	if err := r.client.Create(context.TODO(), configMap); err != nil {
+		r.log.Errorf("unable to create ConfigMap: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 func (r *InvoiceReconciler) generateInvoice(invoice facturnetesv1.Invoice) ([]byte, error) {

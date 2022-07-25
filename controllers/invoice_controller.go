@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"os"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,11 +44,20 @@ func NewReconciler(mgr manager.Manager) *InvoiceReconciler {
 	}
 }
 
+func init() {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		os.Exit(1)
+	}
+	zap.ReplaceGlobals(logger)
+}
+
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/finalizers,verbs=update
 //+kubebuilder:rbac:groups=*,resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=*,resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=*,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -60,52 +70,33 @@ func NewReconciler(mgr manager.Manager) *InvoiceReconciler {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *InvoiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	invoice := &facturnetesv1.Invoice{}
+	r.log = zap.S().With("Invoice", req.NamespacedName)
+	r.log.Info("Reconciling Invoice")
 
 	if err := r.client.Get(ctx, req.NamespacedName, invoice); err != nil {
 		r.log.Error(err, "unable to fetch Invoice")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
 	pdf, err := r.generateInvoice(*invoice)
 	if err != nil {
 		r.log.Error(err, "unable to generate PDF invoice")
-		// don't bother requeuing until we get a change to the spec
 		return ctrl.Result{}, nil
 	}
 
-	configMap, err := r.constructConfigMap(invoice, pdf)
-	if err != nil {
-		r.log.Error(err, "unable to construct config map from template")
-		// don't bother requeuing until we get a change to the spec
+	r.log.Debug("Ensuring the ConfigMap exists")
+	if err := r.ensureConfigMap(invoice, pdf); err != nil {
 		return ctrl.Result{}, nil
 	}
 
-	pod, err := r.constructPod(invoice)
-	if err != nil {
-		r.log.Error(err, "unable to construct pod from template")
-		// don't bother requeuing until we get a change to the spec
+	r.log.Debug("Ensuring the Pod exists")
+	if err := r.ensurePod(invoice); err != nil {
 		return ctrl.Result{}, nil
 	}
-	svc, err := r.constuctService(invoice)
-	if err != nil {
-		r.log.Error(err, "unable to construct service from template")
-		// don't bother requeuing until we get a change to the spec
+
+	r.log.Debug("Ensuring the Service exists")
+	if err := r.ensureService(invoice); err != nil {
 		return ctrl.Result{}, nil
-	}
-	// ...and create it on the cluster
-	if err := r.client.Create(ctx, configMap); err != nil {
-		r.log.Error(err, "unable to create ConfigMap", configMap)
-		return ctrl.Result{}, err
-	}
-
-	// ...and create it on the cluster
-	if err := r.client.Create(ctx, pod); err != nil {
-		r.log.Error(err, "unable to create Pod", pod)
-		return ctrl.Result{}, err
-	}
-
-	if err := r.client.Create(ctx, svc); err != nil {
-		r.log.Error(err, "unable to create Service", svc)
-		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil

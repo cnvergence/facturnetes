@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1 contains API Schema definitions for the facturnetes v1 API group
-//+kubebuilder:object:generate=true
-//+groupName=facturnetes.cnvergence.io
+// +kubebuilder:object:generate=true
+// +groupName=facturnetes.cnvergence.io
 package v1
 
 import (

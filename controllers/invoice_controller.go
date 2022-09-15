@@ -55,9 +55,9 @@ func init() {
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/finalizers,verbs=update
-//+kubebuilder:rbac:groups=*,resources=pods,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=*,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=*,resources=services,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=*,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=*,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -84,17 +84,17 @@ func (r *InvoiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	r.log.Debug("Ensuring the ConfigMap exists")
-	if err := r.ensureConfigMap(invoice, pdf); err != nil {
+	r.log.Debug("Ensuring that Secret exists")
+	if err := r.ensureSecret(invoice, pdf); err != nil {
 		return ctrl.Result{}, nil
 	}
 
-	r.log.Debug("Ensuring the Pod exists")
-	if err := r.ensurePod(invoice); err != nil {
+	r.log.Debug("Ensuring that Deployment exists")
+	if err := r.ensureDeployment(invoice); err != nil {
 		return ctrl.Result{}, nil
 	}
 
-	r.log.Debug("Ensuring the Service exists")
+	r.log.Debug("Ensuring that Service exists")
 	if err := r.ensureService(invoice); err != nil {
 		return ctrl.Result{}, nil
 	}

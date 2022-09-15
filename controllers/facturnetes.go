@@ -6,28 +6,27 @@ import (
 	facturnetesv1 "github.com/cnvergence/facturnetes/api/v1"
 	generator "github.com/cnvergence/invoice-generator/invoice"
 	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-func (r *InvoiceReconciler) constructConfigMap(invoice *facturnetesv1.Invoice, data []byte) (*corev1.ConfigMap, error) {
-	configMap := &corev1.ConfigMap{
+func (r *InvoiceReconciler) constructSecret(invoice *facturnetesv1.Invoice, data []byte) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Labels:      make(map[string]string),
-			Annotations: make(map[string]string),
-			Name:        invoice.Name,
-			Namespace:   invoice.Namespace,
+			Name:      invoice.Name,
+			Namespace: invoice.Namespace,
 		},
-		BinaryData: map[string][]byte{"pdf": data},
+		Data: map[string][]byte{"pdf": data},
 	}
 
-	if err := ctrl.SetControllerReference(invoice, configMap, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(invoice, secret, r.Scheme); err != nil {
 		return nil, err
 	}
 
-	return configMap, nil
+	return secret, nil
 }
 
 func (r *InvoiceReconciler) constructService(invoice *facturnetesv1.Invoice) (*corev1.Service, error) {
@@ -56,111 +55,137 @@ func (r *InvoiceReconciler) constructService(invoice *facturnetesv1.Invoice) (*c
 	return svc, nil
 }
 
-func (r *InvoiceReconciler) constructPod(invoice *facturnetesv1.Invoice) (*corev1.Pod, error) {
-	pod := &corev1.Pod{
+func (r *InvoiceReconciler) constructDeployment(invoice *facturnetesv1.Invoice) (*appsv1.Deployment, error) {
+	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
 				"app": invoice.Name,
 			},
-			Annotations: make(map[string]string),
-			Name:        invoice.Name,
-			Namespace:   invoice.Namespace,
+			Name:      invoice.Name,
+			Namespace: invoice.Namespace,
 		},
-		Spec: corev1.PodSpec{
-			Volumes: []corev1.Volume{{
-				Name: "viewer-volume",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: invoice.Name,
-						},
-						Items: []corev1.KeyToPath{{
-							Key:  "pdf",
-							Path: "test.pdf",
-						},
-						},
-					},
-				}}},
-			Containers: []corev1.Container{{
-				Image: "viewer:latest",
-				Name:  "viewer",
-				Env: []corev1.EnvVar{{
-					Name:  "REQUEST_HASH",
-					Value: "test.pdf",
-				}},
-				Ports: []corev1.ContainerPort{
-					{
-						ContainerPort: 3030,
-						Name:          "http",
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": invoice.Name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": invoice.Name,
 					},
 				},
-				ImagePullPolicy: "Never",
-				VolumeMounts: []corev1.VolumeMount{{
-					Name:      "viewer-volume",
-					MountPath: "/etc/config",
+				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{{
+						Name: "viewer-volume",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{
+								SecretName: invoice.Name,
+								Items: []corev1.KeyToPath{{
+									Key:  "pdf",
+									Path: "test.pdf",
+								},
+								},
+							},
+						}}},
+					Containers: []corev1.Container{{
+						Image: "viewer:latest",
+						Name:  "viewer",
+						Env: []corev1.EnvVar{{
+							Name:  "REQUEST_HASH",
+							Value: "test.pdf",
+						}},
+						Ports: []corev1.ContainerPort{
+							{
+								ContainerPort: 3030,
+								Name:          "http",
+							},
+						},
+						ImagePullPolicy: "Never",
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "viewer-volume",
+							MountPath: "/etc/config",
+						},
+						},
+					}},
 				},
-				},
-			}},
+			},
 		},
 	}
 
-	if err := ctrl.SetControllerReference(invoice, pod, r.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(invoice, dep, r.Scheme); err != nil {
 		return nil, err
 	}
 
-	return pod, nil
+	return dep, nil
 }
 
 func (r *InvoiceReconciler) ensureService(invoice *facturnetesv1.Invoice) error {
 	svc, err := r.constructService(invoice)
 	if err != nil {
-		r.log.Error(err, "unable to construct Pod from template")
+		r.log.Error(err, "unable to construct Service from template")
+		return err
+	}
+	svco := svc.DeepCopyObject().(*corev1.Service)
+	op, err := ctrl.CreateOrUpdate(context.TODO(), r.client, svc, func() error {
+		svco.Spec = svc.Spec
+		return nil
+	})
+	if err != nil {
+		r.log.Errorf("Could not create or patch the service: %s", err)
 		return err
 	}
 
-	r.log.Infof("creating a new Pod %s/%s", svc.Namespace, svc.Name)
-	if err := r.client.Create(context.TODO(), svc); err != nil {
-		r.log.Errorf("unable to create Pod: %v", err)
-		return err
-	}
+	r.log.Infow("Create/Update operation succeeded", "operation", op)
 
 	return nil
 }
 
-func (r *InvoiceReconciler) ensurePod(invoice *facturnetesv1.Invoice) error {
-	pod, err := r.constructPod(invoice)
+func (r *InvoiceReconciler) ensureDeployment(invoice *facturnetesv1.Invoice) error {
+	dep, err := r.constructDeployment(invoice)
 	if err != nil {
-		r.log.Error(err, "unable to construct Pod from template")
+		r.log.Error(err, "unable to construct Deployment from template")
 		return err
 	}
-
-	r.log.Infof("creating a new Pod %s/%s", pod.Namespace, pod.Name)
-	if err := r.client.Create(context.TODO(), pod); err != nil {
-		r.log.Errorf("unable to create Pod: %v", err)
+	depo := dep.DeepCopyObject().(*appsv1.Deployment)
+	op, err := ctrl.CreateOrUpdate(context.TODO(), r.client, depo, func() error {
+		depo.Spec = dep.Spec
+		return nil
+	})
+	if err != nil {
+		r.log.Errorf("Could not create or patch the Deployment: %s", err)
 		return err
 	}
+	r.log.Infow("Create/Update operation succeeded", "operation", op)
 
 	return nil
 }
 
-func (r *InvoiceReconciler) ensureConfigMap(invoice *facturnetesv1.Invoice, pdf []byte) error {
-	configMap, err := r.constructConfigMap(invoice, pdf)
+func (r *InvoiceReconciler) ensureSecret(invoice *facturnetesv1.Invoice, pdf []byte) error {
+	sc, err := r.constructSecret(invoice, pdf)
 	if err != nil {
-		r.log.Error(err, "unable to construct ConfigMap from template")
+		r.log.Error(err, "unable to construct Secret from template")
+		return err
+	}
+	sco := sc.DeepCopyObject().(*corev1.Secret)
+	r.log.Infow("Reconciling Secret", "name", sco.Name)
+	op, err := ctrl.CreateOrUpdate(context.TODO(), r.client, sco, func() error {
+		sco.Data = sc.Data
+		return nil
+	})
+	if err != nil {
+		r.log.Errorf("Could not create or patch the Secret: %s", err)
 		return err
 	}
 
-	r.log.Infof("creating a new ConfigMap %s/%s", configMap.Namespace, configMap.Name)
-	if err := r.client.Create(context.TODO(), configMap); err != nil {
-		r.log.Errorf("unable to create ConfigMap: %v", err)
-		return err
-	}
+	r.log.Infow("Create/Update operation succeeded", "operation", op)
 
 	return nil
 }
 
 func (r *InvoiceReconciler) generateInvoice(invoice facturnetesv1.Invoice) ([]byte, error) {
-	data, err := yaml.Marshal(invoice.Spec)
+	data, err := yaml.Marshal(invoice.Spec.InvoiceData)
 	if err != nil {
 		r.log.Error(err, "unable to marshal yaml")
 		return nil, err

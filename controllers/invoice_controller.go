@@ -57,13 +57,13 @@ func init() {
 	zap.ReplaceGlobals(logger)
 }
 
-//+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/finalizers,verbs=update
-//+kubebuilder:rbac:groups=*,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=*,resources=services,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=*,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-
+// +kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=facturnetes.cnvergence.io,resources=invoices/finalizers,verbs=update
+// +kubebuilder:rbac:groups=*,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=*,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=*,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=*,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -104,7 +104,7 @@ func (r *InvoiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
-	if invoice.Spec.Ingress.Enabled {
+	if invoice.Spec.Exposure.Ingress.Enabled {
 		r.log.Debug("Ensuring that Ingress exists")
 		if err := r.ensureIngress(&invoice); err != nil {
 			return r.SetFailureStatus(ctx, &invoice, err)

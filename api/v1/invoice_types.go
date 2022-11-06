@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -56,8 +57,8 @@ type InvoiceList struct {
 type InvoiceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	PublicURL string  `json:"publicURL,omitempty"`
-	Ingress   Ingress `json:"ingress,omitempty"`
+	Exposure   Exposure   `json:"exposure,omitempty"`
+	Deployment Deployment `json:"deployment,omitempty"`
 
 	InvoiceData InvoiceData `json:"invoiceData" yaml:"invoiceData"`
 }
@@ -74,6 +75,26 @@ type InvoiceStatus struct {
 	Endpoint string `json:"endpoint,omitempty"`
 }
 
+type Deployment struct {
+	// +kubebuilder:default:=viewer
+	// +optional
+	Name string `json:"name,omitempty"`
+	// +optional
+	Image string `json:"image,omitempty"`
+	// +kubebuilder:default:=Never
+	// +optional
+	ImagePullPolicy corev1.PullPolicy `json:"imagePullPolicy,omitempty"`
+}
+
+type Exposure struct {
+	PublicURL  string     `json:"publicURL,omitempty"`
+	Ingress    Ingress    `json:"ingress,omitempty"`
+	GatewayAPI GatewayAPI `json:"gatewayAPI,omitempty"`
+}
+
+type GatewayAPI struct {
+}
+
 type Ingress struct {
 	// Annotations to be added to the Ingress object
 	Annotations map[string]string `json:"annotations,omitempty"`
@@ -85,6 +106,9 @@ type Ingress struct {
 	// TLSEnabled toggles the TLS configuration on the Ingress object
 	// +optional
 	TLSEnabled bool `json:"tlsEnabled,omitempty"`
+	// TLSEnabled toggles the TLS configuration on the Ingress object
+	// +optional
+	IngressClassName string `json:"ingressClassName,omitempty"`
 	// TLSSecretName overrides the generated name for the TLS certificate Secret object
 	// +optional
 	TLSSecretName string `json:"tlsSecretName,omitempty"`

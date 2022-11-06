@@ -42,30 +42,56 @@ spec:
           spec:
             description: InvoiceSpec defines the desired state of Invoice
             properties:
-              ingress:
+              deployment:
                 properties:
-                  annotations:
-                    additionalProperties:
-                      type: string
-                    description: Annotations to be added to the Ingress object
+                  image:
+                    type: string
+                  imagePullPolicy:
+                    default: Never
+                    description: PullPolicy describes a policy for if/when to pull
+                      a container image
+                    type: string
+                  name:
+                    default: viewer
+                    type: string
+                type: object
+              exposure:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                properties:
+                  gatewayAPI:
                     type: object
-                  enabled:
-                    default: true
-                    description: Enabled allows to turn off the Ingress object (for
-                      example for using a LoadBalancer service)
-                    type: boolean
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: Labels to be added to the Ingress object
+                  ingress:
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: Annotations to be added to the Ingress object
+                        type: object
+                      enabled:
+                        default: true
+                        description: Enabled allows to turn off the Ingress object
+                          (for example for using a LoadBalancer service)
+                        type: boolean
+                      ingressClassName:
+                        description: TLSEnabled toggles the TLS configuration on the
+                          Ingress object
+                        type: string
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: Labels to be added to the Ingress object
+                        type: object
+                      tlsEnabled:
+                        description: TLSEnabled toggles the TLS configuration on the
+                          Ingress object
+                        type: boolean
+                      tlsSecretName:
+                        description: TLSSecretName overrides the generated name for
+                          the TLS certificate Secret object
+                        type: string
                     type: object
-                  tlsEnabled:
-                    description: TLSEnabled toggles the TLS configuration on the Ingress
-                      object
-                    type: boolean
-                  tlsSecretName:
-                    description: TLSSecretName overrides the generated name for the
-                      TLS certificate Secret object
+                  publicURL:
                     type: string
                 type: object
               invoiceData:
@@ -172,10 +198,6 @@ spec:
                 - saleDate
                 - signature
                 type: object
-              publicURL:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
-                type: string
             required:
             - invoiceData
             type: object

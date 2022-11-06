@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"context"
+	"net/url"
+	"strings"
 
 	facturnetesv1 "github.com/cnvergence/facturnetes/api/v1"
 	generator "github.com/cnvergence/invoice-generator/invoice"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,6 +56,68 @@ func (r *InvoiceReconciler) constructService(invoice *facturnetesv1.Invoice) (*c
 	}
 
 	return svc, nil
+}
+
+func (r *InvoiceReconciler) constructIngress(invoice *facturnetesv1.Invoice) (*networkingv1.Ingress, error) {
+	u, err := url.Parse(invoice.Spec.PublicURL)
+	if err != nil {
+		return &networkingv1.Ingress{}, err
+	}
+
+	tls := make([]networkingv1.IngressTLS, 0)
+
+	if invoice.Spec.Ingress.TLSEnabled {
+		if invoice.Spec.Ingress.TLSSecretName == "" {
+			invoice.Spec.Ingress.TLSSecretName = u.Host + "-tls"
+		}
+
+		tls = []networkingv1.IngressTLS{
+			{
+				Hosts:      []string{u.Host},
+				SecretName: invoice.Spec.Ingress.TLSSecretName,
+			},
+		}
+	}
+	pathType := networkingv1.PathTypePrefix
+
+	ing := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      invoice.Name,
+			Namespace: invoice.Namespace,
+		},
+		Spec: networkingv1.IngressSpec{
+			TLS: tls,
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: u.Host,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     "/" + strings.TrimPrefix(u.Path, "/"),
+									PathType: &pathType,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: invoice.Name,
+											Port: networkingv1.ServiceBackendPort{
+												Name: "https",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := ctrl.SetControllerReference(invoice, ing, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	return ing, nil
 }
 
 func (r *InvoiceReconciler) constructDeployment(invoice *facturnetesv1.Invoice) (*appsv1.Deployment, error) {
@@ -179,6 +244,26 @@ func (r *InvoiceReconciler) ensureSecret(invoice *facturnetesv1.Invoice, pdf []b
 		return err
 	}
 
+	r.log.Infow("Create/Update operation succeeded", "operation", op)
+
+	return nil
+}
+
+func (r *InvoiceReconciler) ensureIngress(invoice *facturnetesv1.Invoice) error {
+	ing, err := r.constructIngress(invoice)
+	if err != nil {
+		r.log.Error(err, "unable to construct Deployment from template")
+		return err
+	}
+	ingo := ing.DeepCopyObject().(*networkingv1.Ingress)
+	op, err := ctrl.CreateOrUpdate(context.TODO(), r.client, ingo, func() error {
+		ingo.Spec = ing.Spec
+		return nil
+	})
+	if err != nil {
+		r.log.Errorf("Could not create or patch the Deployment: %s", err)
+		return err
+	}
 	r.log.Infow("Create/Update operation succeeded", "operation", op)
 
 	return nil

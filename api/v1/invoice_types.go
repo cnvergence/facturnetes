@@ -20,37 +20,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type CurrentStatus string
+type Phase string
 
 var (
-	StatusFailure CurrentStatus = "Failure"
-	StatusSuccess CurrentStatus = "Success"
+	Failure Phase = "Failure"
+	Success Phase = "Generated"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// InvoiceSpec defines the desired state of Invoice
-type InvoiceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	InvoiceData InvoiceData `json:"invoiceData" yaml:"invoiceData"`
-}
-
-// InvoiceStatus defines the observed state of Invoice
-type InvoiceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	LastProcessedTime  *metav1.Time `json:"lastProcessedTime,omitempty"`
-	ObservedGeneration int64        `json:"observedGeneration,omitempty"`
-	// Current phase of the operator.
-	Status   CurrentStatus `json:"currentStatus,omitempty"`
-	Endpoint string        `json:"endpoint,omitempty"`
-}
-
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="Endpoint",type="string",JSONPath=".status.endpoint"
 // Invoice is the Schema for the invoices API
 type Invoice struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -67,6 +47,47 @@ type InvoiceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Invoice `json:"items"`
+}
+
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// InvoiceSpec defines the desired state of Invoice
+type InvoiceSpec struct {
+	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	PublicURL string  `json:"publicURL,omitempty"`
+	Ingress   Ingress `json:"ingress,omitempty"`
+
+	InvoiceData InvoiceData `json:"invoiceData" yaml:"invoiceData"`
+}
+
+// InvoiceStatus defines the observed state of Invoice
+type InvoiceStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	LastProcessedTime  *metav1.Time `json:"lastProcessedTime,omitempty"`
+	ObservedGeneration int64        `json:"observedGeneration,omitempty"`
+	// Current phase of the operator.
+	Message  string `json:"message,omitempty"`
+	Phase    Phase  `json:"phase,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
+type Ingress struct {
+	// Annotations to be added to the Ingress object
+	Annotations map[string]string `json:"annotations,omitempty"`
+	// Labels to be added to the Ingress object
+	Labels map[string]string `json:"labels,omitempty"`
+	// Enabled allows to turn off the Ingress object (for example for using a LoadBalancer service)
+	// +kubebuilder:default:=true
+	Enabled bool `json:"enabled,omitempty"`
+	// TLSEnabled toggles the TLS configuration on the Ingress object
+	// +optional
+	TLSEnabled bool `json:"tlsEnabled,omitempty"`
+	// TLSSecretName overrides the generated name for the TLS certificate Secret object
+	// +optional
+	TLSSecretName string `json:"tlsSecretName,omitempty"`
 }
 
 type InvoiceData struct {

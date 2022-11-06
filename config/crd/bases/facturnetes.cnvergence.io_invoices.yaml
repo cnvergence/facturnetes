@@ -15,7 +15,14 @@ spec:
     singular: invoice
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .status.endpoint
+      name: Endpoint
+      type: string
+    name: v1
     schema:
       openAPIV3Schema:
         description: Invoice is the Schema for the invoices API
@@ -35,9 +42,33 @@ spec:
           spec:
             description: InvoiceSpec defines the desired state of Invoice
             properties:
+              ingress:
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Annotations to be added to the Ingress object
+                    type: object
+                  enabled:
+                    default: true
+                    description: Enabled allows to turn off the Ingress object (for
+                      example for using a LoadBalancer service)
+                    type: boolean
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: Labels to be added to the Ingress object
+                    type: object
+                  tlsEnabled:
+                    description: TLSEnabled toggles the TLS configuration on the Ingress
+                      object
+                    type: boolean
+                  tlsSecretName:
+                    description: TLSSecretName overrides the generated name for the
+                      TLS certificate Secret object
+                    type: string
+                type: object
               invoiceData:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
                 properties:
                   bank:
                     description: Bank details on the invoice.
@@ -141,15 +172,16 @@ spec:
                 - saleDate
                 - signature
                 type: object
+              publicURL:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                type: string
             required:
             - invoiceData
             type: object
           status:
             description: InvoiceStatus defines the observed state of Invoice
             properties:
-              currentStatus:
-                description: Current phase of the operator.
-                type: string
               endpoint:
                 type: string
               lastProcessedTime:
@@ -158,9 +190,14 @@ spec:
                   this file'
                 format: date-time
                 type: string
+              message:
+                description: Current phase of the operator.
+                type: string
               observedGeneration:
                 format: int64
                 type: integer
+              phase:
+                type: string
             type: object
         type: object
     served: true

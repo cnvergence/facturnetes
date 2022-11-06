@@ -19,13 +19,18 @@ package controllers
 import (
 	"context"
 	"os"
+	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	facturnetesv1 "github.com/cnvergence/facturnetes/api/v1"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -69,42 +74,79 @@ func init() {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *InvoiceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	invoice := &facturnetesv1.Invoice{}
+	invoice := facturnetesv1.Invoice{}
 	r.log = zap.S().With("Invoice", req.NamespacedName)
 	r.log.Info("Reconciling Invoice")
 
-	if err := r.client.Get(ctx, req.NamespacedName, invoice); err != nil {
+	if err := r.client.Get(ctx, req.NamespacedName, &invoice); err != nil {
 		r.log.Error(err, "unable to fetch Invoice")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
-	pdf, err := r.generateInvoice(*invoice)
+	pdf, err := r.generateInvoice(invoice)
 	if err != nil {
 		r.log.Error(err, "unable to generate PDF invoice")
-		return ctrl.Result{}, nil
+		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
 	r.log.Debug("Ensuring that Secret exists")
-	if err := r.ensureSecret(invoice, pdf); err != nil {
-		return ctrl.Result{}, nil
+	if err := r.ensureSecret(&invoice, pdf); err != nil {
+		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
 	r.log.Debug("Ensuring that Deployment exists")
-	if err := r.ensureDeployment(invoice); err != nil {
-		return ctrl.Result{}, nil
+	if err := r.ensureDeployment(&invoice); err != nil {
+		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
 	r.log.Debug("Ensuring that Service exists")
-	if err := r.ensureService(invoice); err != nil {
-		return ctrl.Result{}, nil
+	if err := r.ensureService(&invoice); err != nil {
+		return r.SetFailureStatus(ctx, &invoice, err)
 	}
 
-	return ctrl.Result{}, nil
+	if invoice.Spec.Ingress.Enabled {
+		r.log.Debug("Ensuring that Ingress exists")
+		if err := r.ensureIngress(&invoice); err != nil {
+			return r.SetFailureStatus(ctx, &invoice, err)
+		}
+	}
+
+	return r.SetSuccessStatus(ctx, &invoice)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InvoiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		For(&facturnetesv1.Invoice{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{}).
 		Complete(r)
+}
+
+func (r *InvoiceReconciler) SetSuccessStatus(ctx context.Context, invoice *facturnetesv1.Invoice) (ctrl.Result, error) {
+	invoice.Status.ObservedGeneration = invoice.Generation
+	invoice.Status.LastProcessedTime = &metav1.Time{Time: time.Now()}
+	invoice.Status.Phase = facturnetesv1.Success
+
+	if err := r.client.Status().Update(ctx, invoice); err != nil {
+		r.log.Error(err, "Unable to update the status")
+		return ctrl.Result{
+			RequeueAfter: 15 * time.Second,
+		}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *InvoiceReconciler) SetFailureStatus(ctx context.Context, invoice *facturnetesv1.Invoice, msg error) (ctrl.Result, error) {
+	invoice.Status.Message = msg.Error()
+	invoice.Status.ObservedGeneration = invoice.Generation
+	invoice.Status.LastProcessedTime = &metav1.Time{Time: time.Now()}
+	invoice.Status.Phase = facturnetesv1.Failure
+
+	return ctrl.Result{
+		RequeueAfter: 15 * time.Second,
+	}, r.client.Status().Update(ctx, invoice)
 }
